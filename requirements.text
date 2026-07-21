@@ -1,11 +1,4 @@
 streamlit
 pandas
-transformers
-torch
-sentencepiece
-selenium
-webdriver-manager
-requests
-beautifulsoup4
 altair
-openpyxl
+numpy
