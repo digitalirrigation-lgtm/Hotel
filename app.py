@@ -20,24 +20,7 @@ DB_PATH = "hotel_data.db"
 PASSWORD = "00000000"  # Owner password
 
 # ============================================================
-# TRANSLATIONS (only English for brevity – add others as before)
-# ============================================================
-# For simplicity, we include only English here.
-# But you can copy the full translations from the previous version.
-# We'll keep the English version for clarity.
-TRANSLATIONS = {
-    'en': {
-        # (All translations as before – omitted for space, but keep all)
-        # We'll reuse the full dict from the previous answer.
-        # For brevity, I'll include a placeholder; but in production, copy the full dict.
-    }
-}
-# We'll assume the full translations are in place.
-# In this code, I'll just use English strings directly to save length.
-# But the full multi-lingual version should be used.
-
-# ============================================================
-# DATABASE SETUP (unchanged)
+# DATABASE SETUP
 # ============================================================
 def get_db():
     return sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -102,7 +85,7 @@ else:
     conn.close()
 
 # ============================================================
-# HELPERS (unchanged)
+# HELPERS
 # ============================================================
 def get_hotel_settings():
     conn = get_db()
@@ -194,7 +177,6 @@ def recompute_daily_summary(date):
     conn.close()
 
 def delete_transaction(trans_id):
-    # Get the date of this transaction before deleting
     conn = get_db()
     c = conn.cursor()
     c.execute("SELECT Date FROM Transactions WHERE Id = ?", (trans_id,))
@@ -204,7 +186,6 @@ def delete_transaction(trans_id):
         c.execute("DELETE FROM Transactions WHERE Id = ?", (trans_id,))
         conn.commit()
         conn.close()
-        # Recompute summary for that date
         recompute_daily_summary(date)
         return True
     else:
@@ -273,7 +254,6 @@ def predict_future(df, days=7, target='TotalIncome'):
     return predictions, slope
 
 def generate_insights(df, lang='en'):
-    # Simplified English
     if df.empty:
         return "No data available for insights."
     summary = get_period_summary(df)
@@ -295,7 +275,6 @@ def generate_insights(df, lang='en'):
             insights.append("📉 Income is declining – consider boosting marketing or improving services.")
         else:
             insights.append("➡️ Income is stable.")
-    # top expense category
     conn = get_db()
     start = df['Date'].min() if not df.empty else None
     end = df['Date'].max() if not df.empty else None
@@ -334,7 +313,7 @@ def generate_report_df(df, period_label, lang='en'):
 st.set_page_config(layout="wide", page_title="🏨 Hotel Internal Management System", page_icon="🏨")
 
 # ---- Language selector (simplified: English only for demo) ----
-lang = 'en'  # You can add the full language switcher
+lang = 'en'
 
 # ---- Custom CSS ----
 st.markdown("""
@@ -445,49 +424,22 @@ if role == "👨‍💼 Hotel Manager":
     description = st.text_input("Description (optional)")
     amount = st.number_input("Amount (ETB)", min_value=0.0, step=100.0, value=0.0)
     
-    # Disable button after click using session state
+    # Initialize session state for submission flag
     if 'submitted' not in st.session_state:
         st.session_state.submitted = False
     
-    col1, col2 = st.columns([3,1])
-    with col1:
-        if st.button("➕ Add Transaction", disabled=st.session_state.submitted, use_container_width=True):
-            if amount <= 0:
-                st.warning("Please enter a positive amount.")
-            else:
-                add_transaction(date_str, ttype, category, description, amount)
-                st.session_state.submitted = True
-                st.success(f"✅ {ttype} of {format_money(amount)} added for {date_str}")
-                st.rerun()  # to reset the state? Actually we need to enable again after rerun
-    # Reset submitted flag on rerun? We'll set it false at start of each run.
-    # So after rerun, it will be false again.
-    # But we want it to stay true until user manually resets? Actually after a successful add, we want to show the green button.
-    # We can use a different approach: after adding, we can show a success message and the button stays disabled until user changes something? 
-    # Simpler: we just let the button be disabled for that session, but we can add a "Reset" button or rely on rerun.
-    # We'll change: after adding, set session_state.submitted = True, then st.rerun() will rerun and submitted will still be True unless we reset it.
-    # So we need to reset it after showing success, or use a temporary flag.
-    # Better: use a placeholder for button and use st.empty().
-
-    # Let's rework: We'll use a container and after add, we replace the button with a green "Submitted" message.
-    # But that's complex. Simpler: after add, we can show a success and allow the user to add another by clicking a "Add Another" button.
-    # We'll implement that.
-
-    # We'll put the button and status in a placeholder.
-    # For now, I'll simplify: after add, we just show a success message and keep the button enabled, but we can disable it for a few seconds? Not needed.
-
-    # Actually, the user wants the button to become green and say "Submitted" and disabled to prevent double-click.
-    # I'll implement using st.session_state.submitted = True and then on rerun, check if submitted, show a disabled button with green color.
-    # We'll also add a "Add Another" button that resets the state.
-
-    # Implementation: 
+    # ---- ADD TRANSACTION BUTTON (FIXED) ----
+    # Use a unique key and condition based on submitted state
     if st.session_state.submitted:
-        # Show disabled button
-        st.button("✅ Submitted", disabled=True, use_container_width=True)
-        if st.button("➕ Add Another Transaction"):
+        # Show disabled button with green checkmark
+        st.button("✅ Submitted", disabled=True, key="submitted_btn")
+        # Show "Add Another" button to reset
+        if st.button("➕ Add Another Transaction", key="add_another_btn"):
             st.session_state.submitted = False
             st.rerun()
     else:
-        if st.button("➕ Add Transaction", use_container_width=True):
+        # Show active Add button with unique key
+        if st.button("➕ Add Transaction", key="add_transaction_btn", use_container_width=True):
             if amount <= 0:
                 st.warning("Please enter a positive amount.")
             else:
@@ -497,16 +449,15 @@ if role == "👨‍💼 Hotel Manager":
                 st.rerun()
     
     st.markdown("---")
-    # Delete transaction section
+    
+    # ---- DELETE TRANSACTION SECTION ----
     st.subheader("🗑️ Delete a Transaction")
     trans_df = get_transactions()
     if not trans_df.empty:
-        # Show list of transactions with IDs
         st.dataframe(trans_df[['Id', 'Date', 'Type', 'Category', 'Description', 'Amount']].head(20), use_container_width=True)
-        # Select ID to delete
         ids = trans_df['Id'].tolist()
-        selected_id = st.selectbox("Select Transaction ID to delete", ids)
-        if st.button("Delete Selected Transaction", use_container_width=True):
+        selected_id = st.selectbox("Select Transaction ID to delete", ids, key="delete_select")
+        if st.button("Delete Selected Transaction", key="delete_btn", use_container_width=True):
             if delete_transaction(selected_id):
                 st.success(f"Transaction {selected_id} deleted successfully!")
                 st.rerun()
@@ -514,35 +465,31 @@ if role == "👨‍💼 Hotel Manager":
                 st.error("Failed to delete.")
     else:
         st.info("No transactions to delete.")
-
-    # ---- Document Upload ----
+    
+    # ---- DOCUMENT UPLOAD ----
     st.markdown("---")
     st.subheader("📤 Upload Transactions from Excel/CSV")
-    st.markdown("Upload a file with columns: **Date**, **Type** (Income/Expense), **Category**, **Description**, **Amount**. The system will import all rows.")
-    uploaded_file = st.file_uploader("Choose file", type=['xlsx', 'xls', 'csv'])
+    st.markdown("Upload a file with columns: **Date**, **Type** (Income/Expense), **Category**, **Description**, **Amount**.")
+    uploaded_file = st.file_uploader("Choose file", type=['xlsx', 'xls', 'csv'], key="file_uploader")
     if uploaded_file is not None:
         try:
             if uploaded_file.name.endswith('.csv'):
                 df_upload = pd.read_csv(uploaded_file)
             else:
                 df_upload = pd.read_excel(uploaded_file)
-            # Validate columns
             required = ['Date', 'Type', 'Category', 'Description', 'Amount']
             missing = [col for col in required if col not in df_upload.columns]
             if missing:
                 st.error(f"Missing columns: {missing}. Please ensure the file has the correct headers.")
             else:
-                # Preview
                 st.write("Preview of uploaded data:")
                 st.dataframe(df_upload.head(10), use_container_width=True)
-                if st.button("🚀 Import Transactions"):
-                    # Process each row
+                if st.button("🚀 Import Transactions", key="import_btn"):
                     with st.spinner("Importing..."):
                         errors = 0
                         for idx, row in df_upload.iterrows():
                             try:
                                 date = row['Date']
-                                # Convert date if needed
                                 if isinstance(date, datetime):
                                     date = date.strftime("%Y-%m-%d")
                                 else:
@@ -566,18 +513,19 @@ if role == "👨‍💼 Hotel Manager":
                         st.rerun()
         except Exception as e:
             st.error(f"Error reading file: {e}")
-    st.info("Note: PDF files are not supported for parsing. Please use Excel (.xlsx) or CSV format.")
+    st.info("Note: PDF files are not supported. Please use Excel (.xlsx) or CSV format.")
 
-    # Recent transactions (display)
+    # ---- RECENT TRANSACTIONS ----
     st.markdown("---")
     st.subheader("📋 Recent Transactions")
+    trans_df = get_transactions()
     if not trans_df.empty:
         st.dataframe(trans_df.head(20)[['Id', 'Date', 'Type', 'Category', 'Description', 'Amount']], use_container_width=True)
     else:
         st.info("No transactions yet.")
 
 # ============================================================
-# OWNER VIEW (unchanged, but added delete option maybe not needed)
+# OWNER VIEW
 # ============================================================
 else:
     st.subheader("📊 Business Performance Dashboard")
@@ -586,7 +534,6 @@ else:
         st.warning("No data available. The manager needs to add transactions first.")
         st.stop()
     
-    # Date filter
     st.markdown("### 📅 Filter by Date Range")
     col1, col2 = st.columns(2)
     default_start = (datetime.today() - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -619,7 +566,6 @@ else:
     col3.metric("Income Tax", format_money(total_income_tax))
     col4.metric("Effective Tax Rate", f"{(total_tax / summary['total_income'] * 100):.1f}%" if summary['total_income']>0 else "0%")
     
-    # Category breakdown
     st.markdown("### 📊 Income & Expenses by Category")
     trans = get_transactions(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
     if not trans.empty:
@@ -633,7 +579,6 @@ else:
             ).properties(height=300, width=600)
             st.altair_chart(chart, use_container_width=True)
     
-    # Trends
     st.markdown("### 📈 Income & Expenses Trend")
     chart_data = filtered[['Date', 'TotalIncome', 'TotalExpenses']].melt(id_vars=['Date'], var_name='Metric', value_name='Amount')
     trend_chart = alt.Chart(chart_data).mark_line(point=True, strokeWidth=3).encode(
@@ -652,7 +597,6 @@ else:
     ).properties(height=300)
     st.altair_chart(profit_chart, use_container_width=True)
     
-    # Comparisons
     st.markdown("### 📊 Comparisons")
     today_dt = datetime.today()
     last_month_start = (today_dt - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -693,7 +637,6 @@ else:
         else:
             st.info("Not enough data.")
     
-    # Predictions
     st.markdown("### 🔮 Future Predictions (Next 7 Days)")
     if len(df) >= 3:
         pred_income, slope_i = predict_future(df, 7, 'TotalIncome')
@@ -718,12 +661,10 @@ else:
     else:
         st.warning("Need at least 3 days of data for predictions.")
     
-    # Insights
     st.markdown("### 💡 Insights & Recommendations")
     insights = generate_insights(filtered)
     st.info(insights)
     
-    # Reports
     st.markdown("### 📄 Download Reports")
     col1, col2, col3, col4 = st.columns(4)
     def download_report(df, label):
@@ -751,7 +692,6 @@ else:
     with col4:
         st.markdown(download_report(year_df, "Yearly"), unsafe_allow_html=True)
     
-    # Full data table
     st.markdown("### 📋 Daily Summary Data")
     display_cols = ['Date', 'TotalIncome', 'TotalExpenses', 'Profit', 'VAT', 'IncomeTax', 'TotalTax', 'NetProfit']
     styled = filtered[display_cols].copy()
